@@ -28,7 +28,6 @@ class SendActivity : AppCompatActivity() {
     lateinit var setMaxCoins: Button
     lateinit var sendTypeSpinner: Spinner
     private lateinit var donateBtn: TextView
-    private lateinit var contactsBtn: ImageButton
     lateinit var opReturnText: EditText
     lateinit var opReturnBox: LinearLayout
     private lateinit var qrScan: ImageView
@@ -60,7 +59,6 @@ class SendActivity : AppCompatActivity() {
         setMaxCoins = this.findViewById(R.id.setMaxCoins)
         sendTypeSpinner = this.findViewById(R.id.sendType)
         donateBtn = this.findViewById(R.id.donateBtn)
-        contactsBtn = this.findViewById(R.id.contactsBtn)
         opReturnText = this.findViewById(R.id.opReturnText)
         opReturnBox = this.findViewById(R.id.opReturnBox)
         qrScan = this.findViewById(R.id.qrScan)
@@ -123,7 +121,6 @@ class SendActivity : AppCompatActivity() {
             }
         }
         this.setMaxCoins.setOnClickListener { setMaxCoins() }
-        this.contactsBtn.setOnClickListener { showContactSelectionScreen() }
         this.tvRecipientAddress_AM.addListener(listener)
         this.donateBtn.setOnClickListener { this.displayRecipientAddress(Constants.DONATION_ADDRESS) }
         this.qrScan.setOnClickListener { UIManager.clickScanQR(this, Constants.REQUEST_CODE_SCAN_PAY_TO) }
@@ -163,12 +160,6 @@ class SendActivity : AppCompatActivity() {
 
         println("Setting...")
         this.runOnUiThread { amountText.text = coins }
-    }
-
-    private fun showContactSelectionScreen() {
-        val pickContact = Intent(Intent.ACTION_PICK, ContactsContract.Contacts.CONTENT_URI)
-        pickContact.type = ContactsContract.CommonDataKinds.Phone.CONTENT_TYPE
-        this.startActivityForResult(pickContact, Constants.REQUEST_CODE_GET_CONTACT)
     }
 
     fun displayRecipientAddress(recipientAddress: String?) {
@@ -231,28 +222,6 @@ class SendActivity : AppCompatActivity() {
                             this.processScanOrPaste(scanData)
                         }
                     }
-                }
-            } else {
-                if (data != null) {
-                    if (data.data != null) {
-                        val c = contentResolver.query(data.data!!, null, null, null, null)
-                        c!!.moveToFirst()
-                        try {
-                            val id = c.getString(c.getColumnIndexOrThrow(ContactsContract.Contacts._ID))
-                            val c2 = contentResolver.query(ContactsContract.CommonDataKinds.Phone.CONTENT_URI, null, ContactsContract.CommonDataKinds.Phone.CONTACT_ID + " = " + id, null, null)
-                            c2!!.moveToFirst()
-                            val phoneIndex = c2.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NORMALIZED_NUMBER)
-                            val num = c2.getString(phoneIndex)
-                            this.displayRecipientAddress(num)
-                        } catch (e: Exception) {
-                            UIManager.showToastMessage(this, "No phone number found.")
-                        }
-                        c.close()
-                    } else {
-                        UIManager.showToastMessage(this, "No contact selected.")
-                    }
-                } else {
-                    UIManager.showToastMessage(this, "No contact selected.")
                 }
             }
         }

@@ -142,7 +142,7 @@ class ReceiveActivity : AppCompatActivity() {
             if(currentAddrView) {
                 this.btcAddress.text = WalletManager.walletKit?.paymentCode
             } else {
-                this.btcAddress.text = WalletManager.wallet.currentReceiveAddress().toString().replace(WalletManager.parameters.cashAddrPrefix + ":", "")
+                this.btcAddress.text = WalletManager.wallet.currentReceiveAddress().toCash().toString().replace(WalletManager.parameters.cashAddrPrefix + ":", "")
             }
 
             generateQR(this.btcAddress.text.toString(), R.id.btcQR, false)

@@ -124,7 +124,7 @@ class ReceiveSLPActivity : AppCompatActivity() {
             val address = if (currentAddrView)
                 WalletManager.getSlpKit().currentSlpReceiveAddress().toString()
             else
-                WalletManager.getSlpKit().currentSlpReceiveAddress().toCashAddress()
+                WalletManager.getSlpKit().currentSlpReceiveAddress().toCash().toString()
 
             slpAddress.text = address.replace("simpleledger:", "").replace(WalletManager.parameters.cashAddrPrefix + ":", "")
 

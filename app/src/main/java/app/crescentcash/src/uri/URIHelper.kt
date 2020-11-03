@@ -81,20 +81,6 @@ class URIHelper() {
         }
     }
 
-    fun getRawPhoneNumber(address: String): String {
-        val cointextString = address.replace("cointext:", "")
-        val removedDashes = cointextString.replace("-", "")
-        val removedOpenParenthesis = removedDashes.replace("(", "")
-        val removedClosedParenthesis = removedOpenParenthesis.replace(")", "")
-        var number = removedClosedParenthesis.replace(".", "")
-
-        if (!number.contains("+")) {
-            number = "+1$number"
-        }
-
-        return number
-    }
-
     private fun getQueryBaseAddress(url: String): String {
         val urlParts = url.split("\\?".toRegex()).dropLastWhile { it.isEmpty() }.toTypedArray()
         return if (urlParts.size > 1) {
@@ -126,7 +112,6 @@ class URIHelper() {
 
             address = when {
                 uri.startsWith(WalletManager.parameters.cashAddrPrefix) -> getQueryBaseAddress(uri).replace(WalletManager.parameters.cashAddrPrefix + ":", "")
-                uri.startsWith("cointext") -> this.getRawPhoneNumber(getQueryBaseAddress(uri))
                 uri.startsWith("cashacct") -> getQueryBaseAddress(uri).replace("cashacct:", "")
                 uri.startsWith("simpleledger") -> getQueryBaseAddress(uri).replace("simpleledger:", "")
                 else -> getQueryBaseAddress(uri)
@@ -184,7 +169,6 @@ class URIHelper() {
 
             address = when {
                 uri.startsWith(WalletManager.parameters.cashAddrPrefix) -> getQueryBaseAddress(uri).replace(WalletManager.parameters.cashAddrPrefix + ":", "")
-                uri.startsWith("cointext") -> this.getRawPhoneNumber(getQueryBaseAddress(uri))
                 uri.startsWith("cashacct") -> getQueryBaseAddress(uri).replace("cashacct:", "")
                 uri.startsWith("simpleledger") -> getQueryBaseAddress(uri).replace("simpleledger:", "")
                 else -> getQueryBaseAddress(uri)

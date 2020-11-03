@@ -92,7 +92,7 @@ class WalletManager {
         val SCRYPT_PARAMETERS: Protos.ScryptParameters = Protos.ScryptParameters.newBuilder().setP(6).setR(8).setN(32768).setSalt(ByteString.copyFrom(KeyCrypterScrypt.randomSalt())).build()
 
         val wallet: Wallet
-            get() = walletKit!!.getvWallet()
+            get() = walletKit!!.wallet()
 
         fun setBitcoinSDKThread() {
             val handler = Handler()
@@ -104,9 +104,9 @@ class WalletManager {
         }
 
         fun isAddressMine(address: String): Boolean {
-            val addressObj = AddressFactory.create().fromBase58(parameters, address)
+            val addressObj = AddressFactory.create().getAddress(parameters, address)
 
-            return wallet.isPubKeyHashMine(addressObj.hash)
+            return wallet.isPubKeyHashMine(addressObj.hash160)
         }
 
         fun getBalance(wallet: Wallet): Coin {
@@ -165,7 +165,7 @@ class WalletManager {
                 println(finalAddress)
                 val signedAddress = ECKey.signedMessageToKey(message, signature).toAddress(MainNetParams.get()).toString()
                 val addressLegacy = if (Address.isValidCashAddr(MainNetParams.get(), finalAddress)) {
-                    AddressFactory.create().fromCashAddress(parameters, finalAddress).toBase58()
+                    AddressFactory.create().getAddress(parameters, finalAddress).toBase58()
                 } else {
                     finalAddress
                 }
@@ -181,8 +181,7 @@ class WalletManager {
         fun setupNodeOnStart() {
             val nodeIP = PrefsUtil.prefs.getString("networkNode", "")
             println("GETTING NODE IP: $nodeIP")
-            assert(nodeIP != null)
-            if (!nodeIP.equals("")) {
+            if (nodeIP != "") {
                 this.walletKit!!.setPeerNodes(null)
 
                 var node1: InetAddress? = null
@@ -200,7 +199,6 @@ class WalletManager {
 
         fun setupSlpNodeOnStart() {
             val nodeIP = PrefsUtil.prefs.getString("networkNode", "")
-            assert(nodeIP != null)
             if (nodeIP != "") {
                 this.slpWalletKit!!.setPeerNodes(null)
                 var node1: InetAddress? = null
@@ -227,7 +225,7 @@ class WalletManager {
                 req.allowUnconfirmed()
                 req.ensureMinRequiredFee = false
                 req.feePerKb = Coin.valueOf(java.lang.Long.parseLong(1.toString() + "") * 1000L)
-                val tx = this.walletKit!!.getvWallet().sendCoinsOffline(req)
+                val tx = this.walletKit!!.wallet().sendCoinsOffline(req)
                 this.broadcastTxToPeers(tx)
                 tx.hashAsString
             } catch (e: InsufficientMoneyException) {
@@ -313,7 +311,7 @@ class WalletManager {
         }
 
         fun broadcastTxToPeers(tx: Transaction) {
-            for (peer in walletKit!!.peerGroup.connectedPeers) {
+            for (peer in walletKit!!.peerGroup().connectedPeers) {
                 peer.sendMessage(tx)
             }
         }
@@ -321,67 +319,24 @@ class WalletManager {
         fun setupWalletKit(activity: MainActivity, seed: DeterministicSeed?, cashAcctName: String, verifyingRestore: Boolean, upgradeToBip47: Boolean) {
             setBitcoinSDKThread()
 
-            walletKit = BIP47AppKit().initialize(parameters, walletDir, Constants.WALLET_NAME, seed)
+            walletKit = object : BIP47AppKit(parameters, walletDir, Constants.WALLET_NAME) {
+                override fun onSetupCompleted() {
+                    super.onSetupCompleted()
+                    setupWalletListeners(activity, wallet())
+
+                    println("Setup completed")
+                    println(MainActivity.isNewUser)
+                    val intent = Intent(Constants.ACTION_WALLET_STARTUP_PROCESS)
+                    intent.putExtra("cashAcctName", cashAcctName)
+                    intent.putExtra("verifyRestore", verifyingRestore)
+                    intent.putExtra("upgradeBip47", upgradeToBip47)
+                    LocalBroadcastManager.getInstance(activity).sendBroadcast(intent)
+                }
+            }
+            walletKit?.restoreWalletFromSeed(seed)
             walletKit?.setUseTor(useTor)
-            walletKit?.setOnReceiveTxRunnable {
-                if (!UIManager.isDisplayingDownload) {
-                    activity.displayMyBalance(getBalance(wallet).toFriendlyString(), null)
-                    activity.refresh()
-                }
-            }
-
-            walletKit?.peerGroup?.setBloomFilterFalsePositiveRate(0.01)
-            walletKit?.peerGroup?.isBloomFilteringEnabled = true
-            setupWalletListeners(activity, walletKit!!.getvWallet())
-            if (MainActivity.isNewUser) {
-                val address = walletKit!!.getvWallet().currentReceiveAddress().toString()
-                val paymentCode = walletKit!!.paymentCode
-                println("Registering...")
-                val editor = PrefsUtil.prefs.edit()
-                editor.putBoolean("isNewUser", false)
-                editor.putBoolean("usingNewBlockStore", true)
-                editor.putBoolean("usingNewBlockStoreSlp", true)
-                editor.apply()
-                if (Constants.IS_PRODUCTION) NetManager.registerCashAccount(activity, cashAcctName, paymentCode, address)
-
-                setupSlpWalletKit(activity, walletKit!!.getvWallet().keyChainSeed)
-            } else {
-                val keychainSeed = walletKit!!.getvWallet().keyChainSeed
-
-                if (!keychainSeed.isEncrypted) {
-                    /*
-                    If the saved setting we got is true, but our wallet is unencrypted, then we set our saved setting to false.
-                     */
-                    if (encrypted) {
-                        encrypted = false
-                        PrefsUtil.prefs.edit().putBoolean("useEncryption", encrypted).apply()
-                    }
-
-                    setupSlpWalletKit(activity, walletKit!!.getvWallet().keyChainSeed)
-                }
-
-                if (!verifyingRestore) {
-                    if (seed == null)
-                        activity.refresh()
-                } else {
-                    if(upgradeToBip47) {
-                        val address = walletKit!!.getvWallet().currentReceiveAddress().toString()
-                        val paymentCode = walletKit!!.paymentCode
-                        println("Upgrading...")
-                        PrefsUtil.prefs.edit().putBoolean("isNewUser", false).apply()
-                        if (Constants.IS_PRODUCTION) NetManager.registerCashAccount(activity, cashAcctName.split("#")[0], paymentCode, address)
-                    }
-
-                    val editor = PrefsUtil.prefs.edit()
-                    editor.putBoolean("usingNewBlockStore", true).apply()
-                    editor.putBoolean("usingNewBlockStoreSlp", true).apply()
-                    editor.apply()
-                }
-            }
-
             setupNodeOnStart()
-
-            walletKit!!.setDownloadProgressTracker(object : DownloadProgressTracker() {
+            walletKit!!.setDownloadListener(object : DownloadProgressTracker() {
                 override fun progress(pct: Double, blocksSoFar: Int, date: Date) {
                     super.progress(pct, blocksSoFar, date)
                     val percentage = pct.toInt()
@@ -401,7 +356,10 @@ class WalletManager {
 
             val checkpointsInputStream = activity.assets.open("checkpoints.txt")
             walletKit!!.setCheckpoints(checkpointsInputStream)
+            walletKit!!.setBlockingStartup(false)
             walletKit!!.startAsync()
+
+            setupSlpWalletKit(activity, seed)
         }
 
         private fun setupWalletListeners(activity: MainActivity, wallet: Wallet) {
@@ -438,13 +396,20 @@ class WalletManager {
             }
         }
 
-        fun setupSlpWalletKit(activity: MainActivity, seed: DeterministicSeed) {
+        fun setupSlpWalletKit(activity: MainActivity, seed: DeterministicSeed?) {
             val mainHandler = Handler(activity.mainLooper)
 
             val runnable = Runnable {
-                this.slpWalletKit = SlpAppKit().initialize(this.parameters, this.walletDir, "users_slp_wallet", seed)
+                this.slpWalletKit = object : SlpAppKit(this.parameters, this.walletDir, "users_slp_wallet") {
+                    override fun onSetupCompleted() {
+                        super.onSetupCompleted()
+                        this@Companion.setupSlpWalletListeners(activity, this.wallet())
+                    }
+                }
+                slpWalletKit?.restoreWalletFromSeed(seed)
                 slpWalletKit?.setUseTor(useTor)
-                this.slpWalletKit!!.setDownloadProgressTracker(object : DownloadProgressTracker() {
+                setupSlpNodeOnStart()
+                this.slpWalletKit!!.setDownloadListener(object : DownloadProgressTracker() {
                     override fun progress(pct: Double, blocksSoFar: Int, date: Date) {
                         super.progress(pct, blocksSoFar, date)
                         val percentage = pct.toInt()
@@ -461,13 +426,9 @@ class WalletManager {
                         }
                     }
                 })
-                this.setupSlpNodeOnStart()
                 val checkpointsInputStream = activity.assets.open("checkpoints.txt")
                 this.slpWalletKit!!.setCheckpoints(checkpointsInputStream)
-                this.setupSlpWalletListeners(activity, this.getSlpWallet())
-
-                val intent = Intent(Constants.ACTION_UPDATE_HOME_SCREEN_BALANCE)
-                LocalBroadcastManager.getInstance(activity).sendBroadcast(intent)
+                slpWalletKit?.setBlockingStartup(false)
                 this.slpWalletKit!!.startAsync()
             }
 
@@ -508,12 +469,55 @@ class WalletManager {
             }
         }
 
+        fun walletStartupProcess(activity: MainActivity, wallet: Wallet, kit: BIP47AppKit, cashAcctName: String, verifyingRestore: Boolean, upgradeToBip47: Boolean) {
+            if (MainActivity.isNewUser) {
+                val address = wallet.currentReceiveAddress().toCash().toString()
+                val paymentCode = kit.paymentCode
+                println("Registering...")
+                val editor = PrefsUtil.prefs.edit()
+                editor.putBoolean("isNewUser", false)
+                editor.putBoolean("usingNewBlockStore", true)
+                editor.putBoolean("usingNewBlockStoreSlp", true)
+                editor.apply()
+                if (Constants.IS_PRODUCTION) NetManager.registerCashAccount(activity, cashAcctName, paymentCode, address)
+            } else {
+                val keychainSeed = wallet.keyChainSeed
+
+                if (!keychainSeed.isEncrypted) {
+                    /*
+                    If the saved setting we got is true, but our wallet is unencrypted, then we set our saved setting to false.
+                     */
+                    if (encrypted) {
+                        encrypted = false
+                        PrefsUtil.prefs.edit().putBoolean("useEncryption", encrypted).apply()
+                    }
+                }
+
+                if (!verifyingRestore) {
+                    activity.refresh()
+                } else {
+                    if(upgradeToBip47) {
+                        val address = wallet.currentReceiveAddress().toCash().toString()
+                        val paymentCode = kit.paymentCode
+                        println("Upgrading...")
+                        PrefsUtil.prefs.edit().putBoolean("isNewUser", false).apply()
+                        if (Constants.IS_PRODUCTION) NetManager.registerCashAccount(activity, cashAcctName.split("#")[0], paymentCode, address)
+                    }
+
+                    val editor = PrefsUtil.prefs.edit()
+                    editor.putBoolean("usingNewBlockStore", true).apply()
+                    editor.putBoolean("usingNewBlockStoreSlp", true).apply()
+                    editor.apply()
+                }
+            }
+        }
+
         fun getSlpKit(): SlpAppKit {
             return slpWalletKit!!
         }
 
         fun getSlpWallet(): Wallet {
-            return slpWalletKit!!.wallet
+            return slpWalletKit!!.wallet()
         }
 
         fun getBIP70Data(sendActivity: SendActivity, url: String) {
@@ -706,16 +710,6 @@ class WalletManager {
                         PrefsUtil.prefs.edit().putString("sendType", this.sendType).apply()
 
                         this.processBIP70(sendActivity, address)
-                    } else if (address.startsWith("+")) {
-                        val rawNumber = URIHelper().getRawPhoneNumber(address)
-                        val numberString = rawNumber.replace("+", "")
-                        var amtToSats = java.lang.Double.parseDouble(bchToSend)
-                        val satFormatter = DecimalFormat("#", DecimalFormatSymbols(Locale.US))
-                        amtToSats *= 100000000
-                        val sats = satFormatter.format(amtToSats).toInt()
-                        val url = "https://pay.cointext.io/p/$numberString/$sats"
-                        println(url)
-                        this.processBIP70(sendActivity, url)
                     } else {
                         if (address.contains("#")) {
                             val toAddressFixed = EmojiParser.removeAllEmojis(address)
@@ -761,7 +755,7 @@ class WalletManager {
                                             this@Companion.attemptBip47Payment(sendActivity, amount, address)
                                         }
                                     }
-                                } else if (Address.isValidCashAddr(parameters, address) || Address.isValidLegacyAddress(parameters, address) && (!AddressFactory.create().fromBase58(parameters, address).p2sh || allowLegacyP2SH)) {
+                                } else if (Address.isValidCashAddr(parameters, address) || Address.isValidLegacyAddress(parameters, address) && (!AddressFactory.create().getAddress(parameters, address).isP2SHAddress || allowLegacyP2SH)) {
                                     this@Companion.finalizeTransaction(sendActivity, amount, address)
                                 }
                             } else {
@@ -780,7 +774,7 @@ class WalletManager {
                                         this@Companion.attemptBip47Payment(sendActivity, amount, toAddress)
                                     }
                                 }
-                            } else if(Address.isValidCashAddr(parameters, toAddress) || Address.isValidLegacyAddress(parameters, toAddress) && (!AddressFactory.create().fromBase58(parameters, toAddress).p2sh || allowLegacyP2SH)) {
+                            } else if(Address.isValidCashAddr(parameters, toAddress) || Address.isValidLegacyAddress(parameters, toAddress) && (!AddressFactory.create().getAddress(parameters, toAddress).isP2SHAddress || allowLegacyP2SH)) {
                                 this@Companion.finalizeTransaction(sendActivity, amount, toAddress)
                             }
                         }
@@ -823,7 +817,7 @@ class WalletManager {
 
                     if (useTor) {
                         if (selectedUtxos.size == 0) {
-                            if (coinAmt >= getBalance(walletKit!!.getvWallet())) {
+                            if (coinAmt >= getBalance(walletKit!!.wallet())) {
                                 req = SendRequest.emptyWallet(parameters, toAddress, NetManager.torProxy)
                                 /*
                                     Bitcoincashj requires emptying the wallet to only have a single output for some reason.
@@ -845,7 +839,7 @@ class WalletManager {
                         }
                     } else {
                         if (selectedUtxos.size == 0) {
-                            if (coinAmt >= getBalance(walletKit!!.getvWallet())) {
+                            if (coinAmt >= getBalance(walletKit!!.wallet())) {
                                 req = SendRequest.emptyWallet(parameters, toAddress)
                                 /*
                                     Bitcoincashj requires emptying the wallet to only have a single output for some reason.
@@ -893,7 +887,7 @@ class WalletManager {
 
                     addOpReturn = cachedAddOpReturn
 
-                    val tx = walletKit!!.getvWallet().sendCoinsOffline(req)
+                    val tx = walletKit!!.wallet().sendCoinsOffline(req)
                     val txHexBytes = Hex.encode(tx.bitcoinSerialize())
                     val txHex = String(txHexBytes, StandardCharsets.UTF_8)
                     broadcastTxToPeers(tx)

@@ -54,7 +54,7 @@ class CreateTokenActivity : AppCompatActivity() {
                 } else {
                     try {
                         val tx = WalletManager.getSlpKit().createSlpGenesisTransaction(ticker, name, "", decimals.toInt(), amount.toLong(), null)
-                        WalletManager.getSlpKit().broadcastSlpTransaction(tx)
+                        WalletManager.getSlpKit().peerGroup().broadcastTransaction(tx)
                         clearFields()
                         UIManager.showToastMessage(this@CreateTokenActivity, "Token created!")
                     } catch (e: InsufficientMoneyException) {

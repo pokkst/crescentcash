@@ -94,6 +94,7 @@ class NetManager {
         }
 
         fun registerCashAccount(activity: MainActivity, cashAcctName: String, paymentCode: String, address: String) {
+            println("Cash addr: $address")
             object : Thread() {
                 override fun run() {
                     if (!cashAcctName.contains("#")) {

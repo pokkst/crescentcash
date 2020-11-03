@@ -52,7 +52,6 @@ class SendSLPActivity : AppCompatActivity() {
     private lateinit var slp_qrScan: ImageView
     lateinit var btnSendSLPSlider: SlideToActView
     lateinit var sendTypeSpinner: Spinner
-    private lateinit var contactsBtn: ImageButton
     private var slpToken: SlpToken? = null
     private var decimalSpots: String = ""
     val amount: String
@@ -92,7 +91,6 @@ class SendSLPActivity : AppCompatActivity() {
         slpAmount = this.findViewById(R.id.slpAmount)
         slpRecipientAddress = this.findViewById(R.id.slpRecipientAddress)
         slp_qrScan = this.findViewById(R.id.slp_qrScan)
-        contactsBtn = this.findViewById(R.id.contactsBtn)
     }
 
     private fun prepareViews() {
@@ -130,7 +128,6 @@ class SendSLPActivity : AppCompatActivity() {
 
         if(this.slpToken != null) {
             this.sendTypeSpinner.visibility = View.INVISIBLE
-            this.contactsBtn.visibility = View.GONE
         }
     }
 
@@ -175,10 +172,10 @@ class SendSLPActivity : AppCompatActivity() {
                                 val tokenId = WalletManager.currentTokenId
                                 val amt = java.lang.Double.parseDouble(slpAmount.text.toString())
                                 val tx = WalletManager.getSlpKit().createSlpTransaction(slpRecipientAddress.text.toString(), tokenId, amt, null)
-                                WalletManager.getSlpKit().broadcastSlpTransaction(tx)
+                                WalletManager.getSlpKit().peerGroup().broadcastTransaction(tx)
                                 val txHexBytes = Hex.encode(tx.bitcoinSerialize())
                                 val txHex = String(txHexBytes, StandardCharsets.UTF_8)
-                                WalletManager.getSlpKit().broadcastSlpTransaction(tx)
+                                WalletManager.getSlpKit().peerGroup().broadcastTransaction(tx)
 
                                 if (!WalletManager.useTor) {
                                     NetManager.broadcastTransaction(null, txHex, "https://rest.bitcoin.com/v2/rawtransactions/sendRawTransaction")
@@ -246,7 +243,6 @@ class SendSLPActivity : AppCompatActivity() {
             }
         }
 
-        this.contactsBtn.setOnClickListener { showContactSelectionScreen() }
         val filter = IntentFilter()
         filter.addAction(Constants.ACTION_CLEAR_SLP_SEND)
         LocalBroadcastManager.getInstance(this).registerReceiver(receiver, filter)
@@ -354,16 +350,6 @@ class SendSLPActivity : AppCompatActivity() {
                     PrefsUtil.prefs.edit().putString("sendTypeSlp", this.sendType).apply()
 
                     this.processBIP70(address)
-                } else if (address.startsWith("+")) {
-                    val rawNumber = URIHelper().getRawPhoneNumber(address)
-                    val numberString = rawNumber.replace("+", "")
-                    var amtToSats = java.lang.Double.parseDouble(bchToSend)
-                    val satFormatter = DecimalFormat("#", DecimalFormatSymbols(Locale.US))
-                    amtToSats *= 100000000
-                    val sats = satFormatter.format(amtToSats).toInt()
-                    val url = "https://pay.cointext.io/p/$numberString/$sats"
-                    println(url)
-                    this.processBIP70(url)
                 } else {
                     if (address.contains("#")) {
                         val toAddressFixed = EmojiParser.removeAllEmojis(address)
@@ -385,7 +371,7 @@ class SendSLPActivity : AppCompatActivity() {
     }
 
     private fun sendCoins(amount: String, toAddress: String) {
-        if (toAddress.contains("#") || Address.isValidCashAddr(WalletManager.parameters, toAddress) || Address.isValidLegacyAddress(WalletManager.parameters, toAddress) && (!AddressFactory.create().fromBase58(WalletManager.parameters, toAddress).p2sh || WalletManager.allowLegacyP2SH)) {
+        if (toAddress.contains("#") || Address.isValidCashAddr(WalletManager.parameters, toAddress) || Address.isValidLegacyAddress(WalletManager.parameters, toAddress) && (!AddressFactory.create().getAddress(WalletManager.parameters, toAddress).isP2SHAddress || WalletManager.allowLegacyP2SH)) {
             object : Thread() {
                 override fun run() {
                     val coinAmt = Coin.parseCoin(amount)
@@ -428,7 +414,7 @@ class SendSLPActivity : AppCompatActivity() {
                             val tx = WalletManager.getSlpWallet().sendCoinsOffline(req)
                             val txHexBytes = Hex.encode(tx.bitcoinSerialize())
                             val txHex = String(txHexBytes, StandardCharsets.UTF_8)
-                            WalletManager.slpWalletKit!!.broadcastSlpTransaction(tx)
+                            WalletManager.slpWalletKit!!.peerGroup().broadcastTransaction(tx)
 
                             if (!WalletManager.useTor) {
                                 NetManager.broadcastTransaction(null, txHex, "https://rest.bitcoin.com/v2/rawtransactions/sendRawTransaction")
@@ -486,12 +472,6 @@ class SendSLPActivity : AppCompatActivity() {
         } catch (e: InsufficientMoneyException) {
             throwSendError("You do not have enough BCH!")
         }
-    }
-
-    private fun showContactSelectionScreen() {
-        val pickContact = Intent(Intent.ACTION_PICK, ContactsContract.Contacts.CONTENT_URI)
-        pickContact.type = ContactsContract.CommonDataKinds.Phone.CONTENT_TYPE
-        this.startActivityForResult(pickContact, Constants.REQUEST_CODE_GET_SLP_CONTACT)
     }
 
     fun throwSendError(message: String) {
@@ -556,7 +536,7 @@ class SendSLPActivity : AppCompatActivity() {
                 val rawTokens = session.rawTokenAmounts
                 val addresses = session.getSlpAddresses(WalletManager.parameters)
                 val tx = WalletManager.slpWalletKit?.createSlpTransactionBip70(tokenId, null, rawTokens, addresses, session)
-                val ack = session.sendPayment(ImmutableList.of(tx!!), WalletManager.slpWalletKit?.wallet?.freshReceiveAddress(), null)
+                val ack = session.sendPayment(ImmutableList.of(tx!!), WalletManager.slpWalletKit?.wallet()?.freshReceiveAddress(), null)
                 if (ack != null) {
                     Futures.addCallback<SlpPaymentProtocol.Ack>(ack, object : FutureCallback<SlpPaymentProtocol.Ack> {
                         override fun onSuccess(ack: SlpPaymentProtocol.Ack?) {
@@ -597,28 +577,6 @@ class SendSLPActivity : AppCompatActivity() {
                             this.processScanOrPaste(scanData)
                         }
                     }
-                }
-            } else {
-                if (data != null) {
-                    if (data.data != null) {
-                        val c = contentResolver.query(data.data!!, null, null, null, null)
-                        c!!.moveToFirst()
-                        try {
-                            val id = c.getString(c.getColumnIndexOrThrow(ContactsContract.Contacts._ID))
-                            val c2 = contentResolver.query(ContactsContract.CommonDataKinds.Phone.CONTENT_URI, null, ContactsContract.CommonDataKinds.Phone.CONTACT_ID +" = "+ id, null, null)
-                            c2!!.moveToFirst()
-                            val phoneIndex = c2.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NORMALIZED_NUMBER)
-                            val num = c2.getString(phoneIndex)
-                            this.slpRecipientAddress.text = num
-                        } catch (e: Exception) {
-                            UIManager.showToastMessage(this, "No phone number found.")
-                        }
-                        c.close()
-                    } else {
-                        UIManager.showToastMessage(this, "No contact selected.")
-                    }
-                } else {
-                    UIManager.showToastMessage(this, "No contact selected.")
                 }
             }
         }

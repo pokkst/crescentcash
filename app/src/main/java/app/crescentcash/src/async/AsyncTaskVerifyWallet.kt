@@ -54,7 +54,7 @@ class AsyncTaskVerifyWallet(val activity: MainActivity, val cashAcctName: String
             } else {
                 val accountAddress: Address? = when {
                     Address.isValidCashAddr(WalletManager.parameters, result) -> CashAddressFactory.create().getFromFormattedAddress(WalletManager.parameters, result)
-                    Address.isValidLegacyAddress(WalletManager.parameters, result) -> AddressFactory.create().fromBase58(WalletManager.parameters, result)
+                    Address.isValidLegacyAddress(WalletManager.parameters, result) -> AddressFactory.create().getAddress(WalletManager.parameters, result)
                     else -> {
                         activity.runOnUiThread { UIManager.showToastMessage(activity, "No address found!") }
                         null
@@ -64,7 +64,7 @@ class AsyncTaskVerifyWallet(val activity: MainActivity, val cashAcctName: String
                 val tempWallet = Wallet.fromSeed(WalletManager.parameters, seed)
 
                 val isAddressMine = if (accountAddress != null) {
-                    tempWallet.isPubKeyHashMine(accountAddress.hash)
+                    tempWallet.isPubKeyHashMine(accountAddress.hash160)
                 } else {
                     false
                 }

@@ -56,6 +56,15 @@ class MainActivity : AppCompatActivity() {
 
     private var receiver: BroadcastReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
+            if (Constants.ACTION_WALLET_STARTUP_PROCESS == intent.action) {
+                val kit = WalletManager.walletKit
+                val cashAcctName = intent.extras?.getString("cashAcctName") ?: ""
+                val verifyingRestore = intent.extras?.getBoolean("verifyRestore") ?: false
+                val upgradeBip47 = intent.extras?.getBoolean("upgradeBip47") ?: false
+                if(kit != null) {
+                    WalletManager.walletStartupProcess(this@MainActivity, WalletManager.wallet, kit, cashAcctName, verifyingRestore, upgradeBip47)
+                }
+            }
             if (Constants.ACTION_UPDATE_HOME_SCREEN_BALANCE == intent.action) {
                 this@MainActivity.refresh()
 
@@ -105,20 +114,7 @@ class MainActivity : AppCompatActivity() {
             this.newuser.visibility = View.VISIBLE
         } else {
             if (savedInstanceState == null && WalletManager.walletKit == null) {
-                if(BIP47AppKit.isWalletEncrypted(WalletManager.walletDir, Constants.WALLET_NAME)) {
-                    /*
-                    If the saved setting we got is false, but our wallet is encrypted, then we set our saved setting to true.
-                     */
-                    if (!WalletManager.encrypted) {
-                        WalletManager.encrypted = true
-                        PrefsUtil.prefs.edit().putBoolean("useEncryption", WalletManager.encrypted).apply()
-                    }
-
-                    val decryptIntent = Intent(this, DecryptWalletActivity::class.java)
-                    this.startActivityForResult(decryptIntent, Constants.REQUEST_CODE_DECRYPT)
-                } else {
-                    this.startWalletAndChecks();
-                }
+                this.startWalletAndChecks()
             } else {
                 val intent = Intent(Constants.ACTION_UPDATE_HOME_SCREEN_BALANCE)
                 LocalBroadcastManager.getInstance(this@MainActivity).sendBroadcast(intent)
@@ -244,6 +240,7 @@ class MainActivity : AppCompatActivity() {
         val filter = IntentFilter()
         filter.addAction(Constants.ACTION_UPDATE_HOME_SCREEN_BALANCE)
         filter.addAction(Constants.ACTION_UPDATE_HOME_SCREEN_THEME)
+        filter.addAction(Constants.ACTION_WALLET_STARTUP_PROCESS)
         LocalBroadcastManager.getInstance(this).registerReceiver(receiver, filter)
     }
 
@@ -287,7 +284,7 @@ class MainActivity : AppCompatActivity() {
     private fun upgradeToBip47CashAccount() {
         val cashAcct = PrefsUtil.prefs.getString("cashAccount", "")!!
         val plainName = cashAcct.split("#")[0]
-        val address = WalletManager.walletKit!!.getvWallet().currentReceiveAddress().toString()
+        val address = WalletManager.walletKit!!.wallet().currentReceiveAddress().toString()
         val paymentCode = WalletManager.walletKit!!.paymentCode
         println("Registering...")
         PrefsUtil.prefs.edit().putBoolean("isNewUser", false).apply()
