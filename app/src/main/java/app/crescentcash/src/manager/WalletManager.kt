@@ -320,17 +320,20 @@ class WalletManager {
             setBitcoinSDKThread()
 
             walletKit = object : BIP47AppKit(parameters, walletDir, Constants.WALLET_NAME) {
-                override fun onSetupCompleted() {
-                    super.onSetupCompleted()
+                override fun startUp() {
+                    super.startUp()
                     setupWalletListeners(activity, wallet())
 
                     println("Setup completed")
                     println(MainActivity.isNewUser)
-                    val intent = Intent(Constants.ACTION_WALLET_STARTUP_PROCESS)
-                    intent.putExtra("cashAcctName", cashAcctName)
-                    intent.putExtra("verifyRestore", verifyingRestore)
-                    intent.putExtra("upgradeBip47", upgradeToBip47)
-                    LocalBroadcastManager.getInstance(activity).sendBroadcast(intent)
+                    activity.runOnUiThread {
+                        val intent = Intent(Constants.ACTION_WALLET_STARTUP_PROCESS)
+                        intent.putExtra("paymentCode", paymentCode)
+                        intent.putExtra("cashAcctName", cashAcctName)
+                        intent.putExtra("verifyRestore", verifyingRestore)
+                        intent.putExtra("upgradeBip47", upgradeToBip47)
+                        LocalBroadcastManager.getInstance(activity).sendBroadcast(intent)
+                    }
                 }
             }
             walletKit?.restoreWalletFromSeed(seed)
@@ -469,10 +472,9 @@ class WalletManager {
             }
         }
 
-        fun walletStartupProcess(activity: MainActivity, wallet: Wallet, kit: BIP47AppKit, cashAcctName: String, verifyingRestore: Boolean, upgradeToBip47: Boolean) {
+        fun walletStartupProcess(activity: MainActivity, wallet: Wallet, paymentCode: String, cashAcctName: String, verifyingRestore: Boolean, upgradeToBip47: Boolean) {
             if (MainActivity.isNewUser) {
                 val address = wallet.currentReceiveAddress().toCash().toString()
-                val paymentCode = kit.paymentCode
                 println("Registering...")
                 val editor = PrefsUtil.prefs.edit()
                 editor.putBoolean("isNewUser", false)
@@ -498,7 +500,6 @@ class WalletManager {
                 } else {
                     if(upgradeToBip47) {
                         val address = wallet.currentReceiveAddress().toCash().toString()
-                        val paymentCode = kit.paymentCode
                         println("Upgrading...")
                         PrefsUtil.prefs.edit().putBoolean("isNewUser", false).apply()
                         if (Constants.IS_PRODUCTION) NetManager.registerCashAccount(activity, cashAcctName.split("#")[0], paymentCode, address)

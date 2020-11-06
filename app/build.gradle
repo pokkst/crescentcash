@@ -10,8 +10,8 @@ android {
         applicationId "app.crescentcash.src"
         minSdkVersion 23
         targetSdkVersion 29
-        versionCode 125
-        versionName "1.15"
+        versionCode 126
+        versionName "1.15.1"
     }
     buildTypes {
         release {

@@ -57,13 +57,11 @@ class MainActivity : AppCompatActivity() {
     private var receiver: BroadcastReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             if (Constants.ACTION_WALLET_STARTUP_PROCESS == intent.action) {
-                val kit = WalletManager.walletKit
+                val paymentCode = intent.extras?.getString("paymentCode") ?: ""
                 val cashAcctName = intent.extras?.getString("cashAcctName") ?: ""
                 val verifyingRestore = intent.extras?.getBoolean("verifyRestore") ?: false
                 val upgradeBip47 = intent.extras?.getBoolean("upgradeBip47") ?: false
-                if(kit != null) {
-                    WalletManager.walletStartupProcess(this@MainActivity, WalletManager.wallet, kit, cashAcctName, verifyingRestore, upgradeBip47)
-                }
+                WalletManager.walletStartupProcess(this@MainActivity, WalletManager.wallet, paymentCode, cashAcctName, verifyingRestore, upgradeBip47)
             }
             if (Constants.ACTION_UPDATE_HOME_SCREEN_BALANCE == intent.action) {
                 this@MainActivity.refresh()
