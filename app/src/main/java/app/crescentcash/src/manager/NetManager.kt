@@ -480,19 +480,44 @@ class NetManager {
         private val entropy: ByteArray
             get() = getEntropy(SecureRandom())
 
+        private var lastCheckedUsd = 0L
+        private var cachedUsdPrice = 0.0
+        private var lastCheckedEur = 0L
+        private var cachedEurPrice = 0.0
+        private var lastCheckedAud = 0L
+        private var cachedAudPrice = 0.0
+
         val price: Double
             get() {
-                return readPriceFromUrl("https://api.cryptowat.ch/markets/coinbase-pro/bchusd/price")
+                val currentTime = System.currentTimeMillis() / 1000L
+                if (cachedUsdPrice == 0.0 || currentTime - lastCheckedUsd >= 300L) {
+                    lastCheckedUsd = currentTime
+                    cachedUsdPrice =
+                            readPriceFromUrl("https://api.cryptowat.ch/markets/coinbase-pro/bchusd/price")
+                }
+                return cachedUsdPrice
             }
 
         val priceEur: Double
             get() {
-                return readPriceFromUrl("https://api.cryptowat.ch/markets/coinbase-pro/bcheur/price")
+                val currentTime = System.currentTimeMillis() / 1000L
+                if (cachedEurPrice == 0.0 || currentTime - lastCheckedEur >= 300L) {
+                    lastCheckedEur = currentTime
+                    cachedEurPrice =
+                            readPriceFromUrl("https://api.cryptowat.ch/markets/coinbase-pro/bcheur/price")
+                }
+                return cachedEurPrice
             }
 
         val priceAud: Double
             get() {
-                return readPriceFromUrl("https://min-api.cryptocompare.com/data/price?fsym=BCH&tsyms=AUD")
+                val currentTime = System.currentTimeMillis() / 1000L
+                if (cachedAudPrice == 0.0 || currentTime - lastCheckedAud >= 300L) {
+                    lastCheckedAud = currentTime
+                    cachedAudPrice =
+                            readPriceFromUrl("https://min-api.cryptocompare.com/data/price?fsym=BCH&tsyms=AUD")
+                }
+                return cachedAudPrice
             }
 
         private fun readPriceFromUrl(url: String): Double {
