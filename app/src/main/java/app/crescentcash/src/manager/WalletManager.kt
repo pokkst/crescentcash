@@ -338,31 +338,8 @@ class WalletManager {
             }
             walletKit?.restoreWalletFromSeed(seed)
             walletKit?.setUseTor(useTor)
-            setupNodeOnStart()
-            walletKit!!.setDownloadListener(object : DownloadProgressTracker() {
-                override fun progress(pct: Double, blocksSoFar: Int, date: Date) {
-                    super.progress(pct, blocksSoFar, date)
-                    val percentage = pct.toInt()
-                    activity.runOnUiThread {
-                        activity.displayPercentage(percentage)
-                    }
-                }
-
-                override fun doneDownload() {
-                    super.doneDownload()
-                    activity.runOnUiThread {
-                        activity.displayDownloadContent(false)
-                        activity.refresh()
-                    }
-                }
-            })
-
-            val checkpointsInputStream = activity.assets.open("checkpoints.txt")
-            walletKit!!.setCheckpoints(checkpointsInputStream)
-            walletKit!!.setBlockingStartup(false)
-            walletKit!!.startAsync()
-
-            setupSlpWalletKit(activity, seed)
+            walletKit?.setBlockingStartup(false)
+            walletKit?.startAsync()
         }
 
         private fun setupWalletListeners(activity: MainActivity, wallet: Wallet) {

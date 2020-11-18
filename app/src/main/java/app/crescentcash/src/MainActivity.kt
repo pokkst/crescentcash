@@ -57,38 +57,13 @@ class MainActivity : AppCompatActivity() {
     private var receiver: BroadcastReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             if (Constants.ACTION_WALLET_STARTUP_PROCESS == intent.action) {
-                val paymentCode = intent.extras?.getString("paymentCode") ?: ""
-                val cashAcctName = intent.extras?.getString("cashAcctName") ?: ""
-                val verifyingRestore = intent.extras?.getBoolean("verifyRestore") ?: false
-                val upgradeBip47 = intent.extras?.getBoolean("upgradeBip47") ?: false
-                WalletManager.walletStartupProcess(this@MainActivity, WalletManager.wallet, paymentCode, cashAcctName, verifyingRestore, upgradeBip47)
-            }
-            if (Constants.ACTION_UPDATE_HOME_SCREEN_BALANCE == intent.action) {
-                this@MainActivity.refresh()
+                val mnemonicCode = WalletManager.wallet.keyChainSeed.mnemonicCode
+                val recoverySeedStr = StringBuilder()
 
-                if (!UIManager.isDisplayingDownload) {
-                    this@MainActivity.syncPct.text = ""
+                for (x in mnemonicCode!!.indices) {
+                    recoverySeedStr.append(mnemonicCode[x]).append(" ")
                 }
-
-                if (!WalletManager.downloadingSlp) {
-                    this@MainActivity.syncPctSlp.text = ""
-                }
-            }
-            if (Constants.ACTION_UPDATE_HOME_SCREEN_THEME == intent.action) {
-                UIManager.determineTheme(this@MainActivity)
-                this@MainActivity.setContentView(R.layout.activity_main2)
-                this@MainActivity.findViews()
-                this@MainActivity.prepareViews()
-                this@MainActivity.initListeners()
-                this@MainActivity.refresh()
-
-                if (!UIManager.isDisplayingDownload) {
-                    this@MainActivity.syncPct.text = ""
-                }
-
-                if (!WalletManager.downloadingSlp) {
-                    this@MainActivity.syncPctSlp.text = ""
-                }
+                UIManager.showAlertDialog(this@MainActivity, "Your recovery seed:", recoverySeedStr.toString(), "Hide")
             }
         }
     }
@@ -149,36 +124,6 @@ class MainActivity : AppCompatActivity() {
         }
 
         WalletManager.setupWalletKit(this, null, "", verifyingRestore = false, upgradeToBip47 = false)
-        this.displayDownloadContent(true)
-        this.displayDownloadContentSlp(true)
-        usingBip47CashAccount = PrefsUtil.prefs.getBoolean("bip47CashAcct", false)
-
-        if(!usingBip47CashAccount) {
-            upgradeToBip47CashAccount()
-        } else {
-            val cashAcct = PrefsUtil.prefs.getString("cashAccount", "")!!
-            cashAccountSaved = !cashAcct.contains("#???")
-            if (!cashAccountSaved) {
-                WalletManager.registeredTxHash = PrefsUtil.prefs.getString("cashAcctTx", null).toString()
-                val plainName = cashAcct.replace("#???", "")
-                NetManager.checkForAccountIdentity(this, plainName, false)
-
-                WalletManager.timer = object : CountDownTimer(150000, 20) {
-                    override fun onTick(millisUntilFinished: Long) {
-
-                    }
-
-                    override fun onFinish() {
-                        try {
-                            NetManager.checkForAccountIdentity(this@MainActivity, plainName, true)
-                        } catch (e: Exception) {
-                            e.printStackTrace()
-                        }
-
-                    }
-                }.start()
-            }
-        }
     }
 
     private fun findViews() {
